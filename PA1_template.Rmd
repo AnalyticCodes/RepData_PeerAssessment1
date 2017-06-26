@@ -1,25 +1,188 @@
 ---
 title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+author: "ANCO HAN"
+date: '2017 06 25'
+output: html_document
 ---
 
+## Setting up the Environment
+
+* Working Directory
+```{r}
+rm(list=ls())
+rootDir = '~/DS'
+list.files(paste0(rootDir, '/Data'))
+```
+
+* Load Packages
+```{r, message=FALSE, warning=FALSE}
+library(ggplot2)
+library(sqldf)
+```
 
 ## Loading and preprocessing the data
+Show any code that is needed to
 
+1. Load the data (i.e.  read.csv())
+```{r}
+myData = read.csv(paste0(rootDir, '/Data/activity.csv'))
+summary(myData)
+head(myData); tail(myData)
+```
+
+2. Process/transform the data (if necessary) into a format suitable for your analysis
 
 
 ## What is mean total number of steps taken per day?
+For this part of the assignment, you can ignore the missing values in the dataset.
 
+1. Calculate the total number of steps taken per day
+```{r}
+totalCnt = data.frame(value=tapply(myData$steps, myData$date, sum, na.rm=TRUE))
+sum(is.na(totalCnt)) + sum(totalCnt<1000, na.rm=FALSE)
+sum(is.na(totalCnt)) + sum(totalCnt<1000, na.rm=TRUE)
+totalCnt[totalCnt<1000,]
+```
+
+```{r}
+totalCnt = data.frame(value=tapply(myData$steps, myData$date, sum, na.rm=FALSE))
+sum(is.na(totalCnt)) + sum(totalCnt<1000, na.rm=FALSE)
+sum(is.na(totalCnt)) + sum(totalCnt<1000, na.rm=TRUE)
+totalCnt[totalCnt<1000,]
+```
+
+* The Answer is:
+```{r}
+totalCnt
+```
+
+
+2. If you do not understand the difference between a histogram and a barplot, research the difference
+between them. Make a histogram of the total number of steps taken each day
+
+```{r}
+gg = ggplot(data=totalCnt, aes(x=value))
+gg + geom_histogram()
+```
+
+3. Calculate and report the mean and median of the total number of steps taken per day
+
+```{r}
+meanCnt = tapply(myData$steps, myData$date, mean)
+medianCnt = tapply(myData$steps, myData$date, median)
+```
 
 
 ## What is the average daily activity pattern?
 
+1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)
+```{r}
+meanMinCnt = data.frame(value=tapply(myData$steps, myData$interval, mean, na.rm=TRUE))
+meanMinCnt$idx = rownames(meanMinCnt)
+rownames(meanMinCnt) = NULL
+head(meanMinCnt)
+
+gg2 = ggplot(data=meanMinCnt)
+gg2 + geom_line(aes(x=1:NROW(meanMinCnt),y=value))
+```
+
+2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?
+```{r}
+meanMinCnt[meanMinCnt$value == max(meanMinCnt$value),]
+
+sqldf("
+    SELECT *
+    FROM ```meanMinCnt```
+    WHERE value = (SELECT max(value) FROM ```meanMinCnt```)
+    ")
+```
 
 
 ## Imputing missing values
+Note that there are a number of days/intervals where there are missing values (coded as NA). The presence of missing days may introduce bias into some calculations or summaries of the data.
 
+1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
+
+* The Answer is:
+````{r}
+(CountNA = sum(is.na(myData$steps)))
+```
+
+2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.
+```{r}
+
+```
+
+3. Create a new dataset that is equal to the original dataset but with the missing data filled in.
+```{r}
+
+# myData[is.na(myData$steps),]
+# meanMinCnt
+
+mydf1 = 
+sqldf("
+        SELECT A.date, A.interval, A.steps, round(B.value) AS MeanOfInterval
+        FROM ```myData``` A Left Join ```meanMinCnt``` B on A.interval = B.idx;
+      ")
+mydf1$stepsNew = ifelse(is.na(mydf1$steps), mydf1$MeanOfInterval, mydf1$steps) 
+head(mydf1)
+```
+
+4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?
+```{r, message=FALSE, warning=FALSE}
+gg = ggplot(data=totalCnt, aes(x=value))
+gg + geom_histogram()
+
+head(mydf1)
+totalCntNew = data.frame(value=tapply(mydf1$stepsNew, myData$date, sum, na.rm=FALSE))
+gg3 = ggplot(data=totalCntNew, aes(x=value))
+gg3 + geom_histogram()
+
+(meanOfDate = data.frame(meanOfDate=tapply(mydf1$stepsNew, mydf1$date, mean)))
+(medianOfDate = data.frame(medianOfDate=tapply(mydf1$stepsNew, mydf1$date, median)))
+
+cbind(
+meanCnt
+,meanOfDate
+,medianCnt
+,medianOfDate
+)
+```
 
 
 ## Are there differences in activity patterns between weekdays and weekends?
+For this part the weekdays() function may be of some help here. Use the dataset with the filled-in missing values for this part.
+
+1. Create a new factor variable in the dataset with two levels – “weekday” and “weekend” indicating whether a given date is a weekday or weekend day.
+```{r}
+mydf1$date = gsub('-', '', mydf1$date)
+mydf1$day = weekdays(as.Date(mydf1$date, "%Y%m%d"))
+mydf1$weekend_YN = ifelse(mydf1$day %in% c('Sunday', 'Saturday'), 'Y', 'N')
+head(mydf1)
+```
+
+2. Make a panel plot containing a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all weekday days or weekend days (y-axis). See the README file in the GitHub repository to see an example of what this plot should look like using simulated data.
+```{r}
+weekdayData = mydf1[mydf1$weekend_YN == 'N',]
+weekendData = mydf1[mydf1$weekend_YN == 'Y',]
+
+weekdayMean = data.frame(value=tapply(weekdayData$stepsNew, weekdayData$interval, mean))
+weekdayMean$interval = rownames(weekdayMean)
+gg5 = ggplot(data=weekdayMean)
+gg5 + geom_line(aes(x=as.numeric(rownames(weekdayMean)), y=value)) + xlab('interval')
+
+weekendMean = data.frame(value=tapply(weekendData$stepsNew, weekendData$interval, mean))
+weekendMean$interval = rownames(weekendMean)
+gg6 = ggplot(data=weekendMean)
+gg6 + geom_line(aes(x=as.numeric(rownames(weekendMean)), y=value)) + xlab('interval')
+
+weekdayMean$DateType = 'Wday'
+weekendMean$DateType = 'Wend'
+ddda = rbind(weekdayMean, weekendMean)
+
+ggplot(data=ddda) +
+    geom_line(aes(x=as.numeric(interval), y=value)) +
+    facet_grid(DateType ~ .) +
+    xlab('interval')
+```
+
