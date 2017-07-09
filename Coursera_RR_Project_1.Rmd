@@ -104,7 +104,7 @@ Note that there are a number of days/intervals where there are missing values (c
 1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)
 
 * The Answer is:
-````{r}
+```{r}
 (CountNA = sum(is.na(myData$steps)))
 ```
 
